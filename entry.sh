@@ -3,7 +3,8 @@ echo "#================"
 echo "Start Swarm setup"
 
 # Setup path with the docker binaries
-export MYHOST=$(wget -qO- http://169.254.169.254/latest/meta-data/hostname)
+MYHOST=$(wget -qO- http://169.254.169.254/latest/meta-data/hostname)
+export MYHOST
 SWARM_STATE=$(docker info | grep Swarm | cut -f2 -d: | sed -e 's/^[ \t]*//')
 
 echo "PATH=$PATH"
@@ -19,7 +20,8 @@ echo "#================"
 
 get_swarm_id() {
     if [ "$NODE_TYPE" == "manager" ]; then
-        export SWARM_ID=$(docker info | grep ClusterID | cut -f2 -d: | sed -e 's/^[ \t]*//')
+        SWARM_ID=$(docker info | grep ClusterID | cut -f2 -d: | sed -e 's/^[ \t]*//')
+        export SWARM_ID
     else
         # not available in docker info. might be available in future release.
         export SWARM_ID='n/a'
@@ -28,21 +30,24 @@ get_swarm_id() {
 }
 
 get_node_id() {
-    export NODE_ID=$(docker info | grep NodeID | cut -f2 -d: | sed -e 's/^[ \t]*//')
+    NODE_ID=$(docker info | grep NodeID | cut -f2 -d: | sed -e 's/^[ \t]*//')
+    export NODE_ID
     echo "NODE: $NODE_ID"
 }
 
 get_primary_manager_ip() {
     echo "Get Primary Manager IP"
     # query dynamodb and get the Ip for the primary manager.
-    MANAGER=$(aws dynamodb get-item --region $REGION --table-name $DYNAMODB_TABLE --key '{"node_type":{"S": "primary_manager"}}')
-    export MANAGER_IP=$(echo $MANAGER | jq -r '.Item.ip.S')
+    MANAGER=$(aws dynamodb get-item --region "$REGION" --table-name "$DYNAMODB_TABLE" --key '{"node_type":{"S": "primary_manager"}}')
+    MANAGER_IP=$(echo "$MANAGER" | jq -r '.Item.ip.S')
+    export MANAGER_IP
     echo "MANAGER_IP=$MANAGER_IP"
 }
 
 get_manager_token() {
     if [ -n "$MANAGER_IP" ]; then
-        export MANAGER_TOKEN=$(wget -qO- http://$MANAGER_IP:9024/token/manager/)
+        MANAGER_TOKEN=$(wget -qO- http://"$MANAGER_IP":9024/token/manager/)
+        export MANAGER_TOKEN
         echo "MANAGER_TOKEN=$MANAGER_TOKEN"
     else
         echo "MANAGER_TOKEN can't be found yet. MANAGER_IP isn't set yet."
@@ -51,7 +56,8 @@ get_manager_token() {
 
 get_worker_token() {
     if [ -n "$MANAGER_IP" ]; then
-        export WORKER_TOKEN=$(wget -qO- http://$MANAGER_IP:9024/token/worker/)
+        WORKER_TOKEN=$(wget -qO- http://"$MANAGER_IP":9024/token/worker/)
+        export WORKER_TOKEN
         echo "WORKER_TOKEN=$WORKER_TOKEN"
     else
         echo "WORKER_TOKEN can't be found yet. MANAGER_IP isn't set yet."
@@ -70,7 +76,7 @@ confirm_manager_ready() {
         if [ -z "$MANAGER_IP" ] || [ -z "$MANAGER_TOKEN" ] || [ "$MANAGER_TOKEN" == "null" ]; then
             echo "Manager: Primary manager Not ready yet, sleep for 60 seconds."
             sleep 60
-            n=$(($n + 1))
+            n=$((n + 1))
         else
             echo "Manager: Primary manager is ready."
             break
@@ -90,7 +96,7 @@ confirm_node_ready() {
         if [ -z "$MANAGER_IP" ] || [ -z "$WORKER_TOKEN" ] || [ "$WORKER_TOKEN" == "null" ]; then
             echo "Worker: Primary manager Not ready yet, sleep for 60 seconds."
             sleep 60
-            n=$(($n + 1))
+            n=$((n + 1))
         else
             echo "Worker: Primary manager is ready."
             break
@@ -111,7 +117,7 @@ join_as_secondary_manager() {
     # we are not primary, so join as secondary manager.
     n=0
     until [ $n -gt 5 ]; do
-        docker swarm join --token $MANAGER_TOKEN --listen-addr $PRIVATE_IP:2377 --advertise-addr $PRIVATE_IP:2377 $MANAGER_IP:2377
+        docker swarm join --token "$MANAGER_TOKEN" --listen-addr "$PRIVATE_IP":2377 --advertise-addr "$PRIVATE_IP":2377 "$MANAGER_IP":2377
 
         get_swarm_id
         get_node_id
@@ -120,7 +126,7 @@ join_as_secondary_manager() {
         if [ -z "$SWARM_ID" ]; then
             echo "Can't connect to primary manager, sleep and try again"
             sleep 60
-            n=$(($n + 1))
+            n=$((n + 1))
 
             # if we are pending, we might have hit the primary when it was shutting down.
             # we should leave the swarm, and try again, after getting the new primary ip.
@@ -140,13 +146,14 @@ join_as_secondary_manager() {
         fi
 
     done
-    buoy -event="node:manager_join" -swarm_id=$SWARM_ID -channel=$CHANNEL -node_id=$NODE_ID
+    buoy -event="node:manager_join" -swarm_id=$SWARM_ID -channel="$CHANNEL" -node_id="$NODE_ID"
     echo "   Secondary Manager complete"
 }
 
 setup_manager() {
     echo "Setup Manager"
-    export PRIVATE_IP=$(wget -qO- http://169.254.169.254/latest/meta-data/local-ipv4)
+    PRIVATE_IP=$(wget -qO- http://169.254.169.254/latest/meta-data/local-ipv4)
+    export PRIVATE_IP
 
     echo "   PRIVATE_IP=$PRIVATE_IP"
     echo "   PRIMARY_MANAGER_IP=$MANAGER_IP"
@@ -156,8 +163,8 @@ setup_manager() {
         # and it is the primary manager. If it fails, then it isn't first, and treat the record
         # that is there, as the primary manager, and join that swarm.
         aws dynamodb put-item \
-            --table-name $DYNAMODB_TABLE \
-            --region $REGION \
+            --table-name "$DYNAMODB_TABLE" \
+            --region "$REGION" \
             --item '{"node_type":{"S": "primary_manager"},"ip": {"S":"'"$PRIVATE_IP"'"}}' \
             --condition-expression 'attribute_not_exists(node_type)' \
             --return-consumed-capacity TOTAL
@@ -167,7 +174,7 @@ setup_manager() {
         if [ $PRIMARY_RESULT -eq 0 ]; then
             echo "   Primary Manager init"
             # we are the primary, so init the cluster
-            docker swarm init --listen-addr $PRIVATE_IP:2377 --advertise-addr $PRIVATE_IP:2377
+            docker swarm init --listen-addr "$PRIVATE_IP":2377 --advertise-addr "$PRIVATE_IP":2377
             # we can now get the tokens.
             get_swarm_id
             get_node_id
@@ -176,7 +183,7 @@ setup_manager() {
             # send identify message
             buoy -event=identify -iaas_provider=aws
             # send swarm init message
-            buoy -event="swarm:init" -swarm_id=$SWARM_ID -node_id=$NODE_ID -channel=$CHANNEL
+            buoy -event="swarm:init" -swarm_id=$SWARM_ID -node_id="$NODE_ID" -channel="$CHANNEL"
         else
             echo " Error is normal, it is because we already have a primary node, lets setup a secondary manager instead."
             join_as_secondary_manager
@@ -203,7 +210,7 @@ setup_node() {
     # try an connect to the swarm manager.
     n=0
     until [ $n -gt 5 ]; do
-        docker swarm join --token $WORKER_TOKEN $MANAGER_IP:2377
+        docker swarm join --token "$WORKER_TOKEN" "$MANAGER_IP":2377
         get_swarm_id
         get_node_id
 
@@ -211,7 +218,7 @@ setup_node() {
         if [ -z "$NODE_ID" ]; then
             echo "Can't connect to primary manager, sleep and try again"
             sleep 60
-            n=$(($n + 1))
+            n=$((n + 1))
 
             # query dynamodb again, incase the manager changed
             get_primary_manager_ip
@@ -230,7 +237,7 @@ setup_node() {
         fi
 
     done
-    buoy -event="node:join" -swarm_id=$SWARM_ID -channel=$CHANNEL -node_id=$NODE_ID
+    buoy -event="node:join" -swarm_id="$SWARM_ID" -channel="$CHANNEL" -node_id="$NODE_ID"
 }
 
 # see if the primary manager IP is already set.
