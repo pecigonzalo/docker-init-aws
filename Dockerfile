@@ -4,7 +4,11 @@ ENV DEBIAN_FRONTEND noninteractive
 
 
 RUN apt-get update && \
-  apt-get install -y jq libltdl-dev python-pip wget && \
+  apt-get install -y \
+    jq \
+    libltdl-dev \
+    python-pip \
+    wget && \
   pip install -U pip && \
   pip install awscli
 
