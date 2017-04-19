@@ -174,12 +174,14 @@ setup_manager() {
         # try to write to the table as the primary_manager, if it succeeds then it is the first
         # and it is the primary manager. If it fails, then it isn't first, and treat the record
         # that is there, as the primary manager, and join that swarm.
+        set +x
         aws dynamodb put-item \
             --table-name "$DYNAMODB_TABLE" \
             --region "$REGION" \
             --item '{"node_type":{"S": "primary_manager"},"ip": {"S":"'"$PRIVATE_IP"'"}}' \
             --condition-expression 'attribute_not_exists(node_type)' \
             --return-consumed-capacity TOTAL
+        set -x
         PRIMARY_RESULT=$?
         echo "   PRIMARY_RESULT=$PRIMARY_RESULT"
 
