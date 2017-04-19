@@ -51,6 +51,7 @@ get_primary_manager_ip() {
 
 get_manager_token() {
     if [ -n "$MANAGER_IP" ]; then
+
         MANAGER_TOKEN=$(wget -qO- http://"$MANAGER_IP":9024/token/manager/)
         export MANAGER_TOKEN
         echo "MANAGER_TOKEN=$MANAGER_TOKEN"
@@ -251,11 +252,9 @@ get_primary_manager_ip
 # if it is a manager, setup as manager, if not, setup as worker node.
 if [ "$NODE_TYPE" == "manager" ]; then
     echo " It's a Manager, run setup"
-    get_manager_token
     setup_manager
 else
     echo " It's a worker Node, run setup"
-    get_worker_token
     setup_node
 fi
 
