@@ -16,7 +16,6 @@ echo "PATH=$PATH"
 echo "NODE_TYPE=$NODE_TYPE"
 echo "DYNAMODB_TABLE=$DYNAMODB_TABLE"
 echo "HOSTNAME=$MYHOST"
-echo "INSTANCE_NAME=$INSTANCE_NAME"
 echo "AWS_REGION=$REGION"
 # echo "MANAGER_IP=$MANAGER_IP"
 echo "SWARM_STATE=$SWARM_STATE"
@@ -158,7 +157,6 @@ join_as_secondary_manager() {
         fi
 
     done
-    # buoy -event="node:manager_join" -swarm_id=$SWARM_ID -channel="$CHANNEL" -node_id="$NODE_ID"
     echo "   Secondary Manager complete"
 }
 
@@ -194,10 +192,6 @@ setup_manager() {
             get_node_id
 
             echo "   Primary Manager init complete"
-            # send identify message
-            # buoy -event=identify -iaas_provider=aws
-            # send swarm init message
-            # buoy -event="swarm:init" -swarm_id=$SWARM_ID -node_id="$NODE_ID" -channel="$CHANNEL"
         else
             echo " Error is normal, it is because we already have a primary node, lets setup a secondary manager instead."
             join_as_secondary_manager
@@ -253,7 +247,6 @@ setup_node() {
         fi
 
     done
-    # buoy -event="node:join" -swarm_id="$SWARM_ID" -channel="$CHANNEL" -node_id="$NODE_ID"
 }
 
 # see if the primary manager IP is already set.
